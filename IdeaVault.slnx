@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/IdeaVault.Api/IdeaVault.Api.csproj" />
+    <Project Path="src/IdeaVault.Core/IdeaVault.Core.csproj" />
+    <Project Path="src/IdeaVault.Infra/IdeaVault.Infra.csproj" />
+    <Project Path="src/IdeaVault.Web/IdeaVault.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/IdeaVault.Tests/IdeaVault.Tests.csproj" />
+  </Folder>
+</Solution>
