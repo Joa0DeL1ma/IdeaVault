@@ -20,6 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\IdeaVault.Core\IdeaVault.Core.csproj" />
     <ProjectReference Include="..\..\src\IdeaVault.Infra\IdeaVault.Infra.csproj" />
+    <ProjectReference Include="..\..\src\IdeaVault.Api\IdeaVault.Api.csproj" />
   </ItemGroup>
 
 </Project>
