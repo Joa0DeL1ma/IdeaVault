@@ -34,12 +34,12 @@ if (app.Environment.IsDevelopment())
     app.UseWebAssemblyDebugging();
 }
 
-app.UseBlazorFrameworkFiles();
-app.UseStaticFiles();
-
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Serves the Blazor app with fingerprinted, pre-compressed assets (and the processed index.html).
+app.MapStaticAssets();
 
 app.MapHealthChecks("/health");
 app.MapAuthEndpoints();
