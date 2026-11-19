@@ -5,6 +5,12 @@ using IdeaVault.Infra;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Render (and most PaaS) tell the app which port to listen on through $PORT.
+if (builder.Configuration["PORT"] is { Length: > 0 } port)
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+}
+
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException("Missing connection string 'ConnectionStrings__Default'.");
 
