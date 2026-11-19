@@ -1,4 +1,6 @@
+using IdeaVault.Core.Interfaces;
 using IdeaVault.Infra.Data;
+using IdeaVault.Infra.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -10,6 +12,9 @@ public static class DependencyInjection
     {
         services.AddDbContext<IdeaVaultDbContext>(options =>
             options.UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure()));
+
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IIdeaRepository, IdeaRepository>();
 
         return services;
     }

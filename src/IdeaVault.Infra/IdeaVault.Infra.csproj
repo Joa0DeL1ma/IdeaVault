@@ -16,4 +16,8 @@
   <PropertyGroup>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="IdeaVault.Tests" />
+  </ItemGroup>
+
 </Project>

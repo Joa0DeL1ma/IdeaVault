@@ -8,7 +8,12 @@ public static class DatabaseInitializer
     public static async Task InitializeAsync(IdeaVaultDbContext db, CancellationToken cancellationToken = default)
     {
         await db.Database.MigrateAsync(cancellationToken);
+        await SeedAsync(db, cancellationToken);
+    }
 
+    /// <summary>Inserts the default categories when none exist (idempotent).</summary>
+    public static async Task SeedAsync(IdeaVaultDbContext db, CancellationToken cancellationToken = default)
+    {
         if (await db.Categories.AnyAsync(cancellationToken))
         {
             return;
