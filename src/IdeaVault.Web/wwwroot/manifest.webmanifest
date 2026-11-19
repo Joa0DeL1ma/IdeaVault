@@ -1,22 +1,19 @@
 {
-  "name": "IdeaVault.Web",
-  "short_name": "IdeaVault.Web",
+  "name": "IdeaVault",
+  "short_name": "IdeaVault",
+  "description": "Seu cofre pessoal de ideias.",
   "id": "./",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#03173d",
+  "orientation": "portrait",
+  "lang": "pt-BR",
+  "background_color": "#0E0F13",
+  "theme_color": "#0E0F13",
   "prefer_related_applications": false,
   "icons": [
-    {
-      "src": "icon-512.png",
-      "type": "image/png",
-      "sizes": "512x512"
-    },
-    {
-      "src": "icon-192.png",
-      "type": "image/png",
-      "sizes": "192x192"
-    }
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
   ]
 }
