@@ -11,7 +11,7 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, string connectionString)
     {
         services.AddDbContext<IdeaVaultDbContext>(options =>
-            options.UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure()));
+            options.UseNpgsql(ConnectionStringNormalizer.Normalize(connectionString), npgsql => npgsql.EnableRetryOnFailure()));
 
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<IIdeaRepository, IdeaRepository>();
