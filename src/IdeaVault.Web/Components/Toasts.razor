@@ -1,0 +1,29 @@
+@implements IDisposable
+@inject ToastService ToastService
+
+<div class="toasts" aria-live="polite">
+    @foreach (var toast in _toasts)
+    {
+        <div class="toast @(toast.IsError ? "toast-error" : "")" @key="toast">@toast.Message</div>
+    }
+</div>
+
+@code {
+    private sealed record Toast(string Message, bool IsError);
+
+    private readonly List<Toast> _toasts = [];
+
+    protected override void OnInitialized() => ToastService.Shown += Show;
+
+    private void Show(string message, bool isError) => _ = InvokeAsync(async () =>
+    {
+        var toast = new Toast(message, isError);
+        _toasts.Add(toast);
+        StateHasChanged();
+        await Task.Delay(isError ? 5000 : 2500);
+        _toasts.Remove(toast);
+        StateHasChanged();
+    });
+
+    public void Dispose() => ToastService.Shown -= Show;
+}

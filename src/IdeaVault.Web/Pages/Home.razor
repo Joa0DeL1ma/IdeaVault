@@ -1,7 +1,206 @@
-﻿@page "/"
+@page "/"
+@implements IDisposable
+@inject ApiClient Api
+@inject ToastService Toast
+@inject NavigationManager Nav
 
-<PageTitle>Home</PageTitle>
+<PageTitle>IdeaVault</PageTitle>
 
-<h1>Hello, world!</h1>
+<form class="quick-capture" @onsubmit="CaptureAsync">
+    <input class="input input-lg" placeholder="💡 Teve uma ideia? Escreva e aperte Enter…" maxlength="2000"
+           @bind="_quickText" @bind:event="oninput" aria-label="Captura rápida" />
+    <button type="submit" class="btn btn-primary" disabled="@(_capturing || string.IsNullOrWhiteSpace(_quickText))">Capturar</button>
+</form>
 
-Welcome to your new app.
+<div class="chips" role="tablist">
+    <button class="chip @(_categoryId is null ? "active" : "")" @onclick="() => SelectCategory(null)">Todas</button>
+    @foreach (var category in _categories)
+    {
+        <button class="chip @(_categoryId == category.Id ? "active" : "")" style="--cat: @category.Color"
+                @onclick="() => SelectCategory(category.Id)">
+            @category.Emoji @category.Name <small>@category.IdeaCount</small>
+        </button>
+    }
+</div>
+
+<div class="toolbar">
+    <input class="input search" type="search" placeholder="🔎 Buscar em títulos, resumos e tópicos"
+           @bind="_search" @bind:event="oninput" @bind:after="SearchChanged" aria-label="Buscar" />
+    <select class="input" @bind="_status" @bind:after="LoadIdeasAsync" aria-label="Status">
+        <option value="">Todos os status</option>
+        @foreach (var status in Enum.GetValues<IdeaStatus>())
+        {
+            <option value="@status">@Labels.Status(status)</option>
+        }
+    </select>
+    <select class="input" @bind="_sort" @bind:after="LoadIdeasAsync" aria-label="Ordenar">
+        <option value="@IdeaSort.Updated">Mais recentes</option>
+        <option value="@IdeaSort.Excitement">Mais empolgantes</option>
+    </select>
+    <button class="btn" @onclick="() => _showNew = true">+ Nova ideia</button>
+</div>
+
+@if (_tag is not null)
+{
+    <div class="active-filter">Filtrando por <span class="tag">#@_tag</span> <button class="link" @onclick="() => FilterByTag(null)">limpar</button></div>
+}
+
+@if (_ideas is null)
+{
+    <div class="grid">@for (var i = 0; i < 6; i++) { <div class="card skeleton"></div> }</div>
+}
+else if (_ideas.Count == 0)
+{
+    <div class="empty-state">
+        <p class="empty-emoji">🌱</p>
+        <p>@(HasFilters ? "Nenhuma ideia encontrada com esses filtros." : "Nenhuma ideia ainda. Capture a primeira aí em cima!")</p>
+    </div>
+}
+else
+{
+    <div class="grid">
+        @foreach (var idea in _ideas)
+        {
+            <IdeaCard @key="idea.Id" Idea="idea" OnTagClick="FilterByTag" />
+        }
+    </div>
+}
+
+@if (_showNew)
+{
+    <div class="modal-backdrop" @onclick="() => _showNew = false">
+        <form class="modal" @onclick:stopPropagation @onsubmit="CreateAsync">
+            <h2>Nova ideia</h2>
+            <label>Título
+                <input class="input" @bind="_newTitle" @bind:event="oninput" maxlength="200" autofocus />
+            </label>
+            <label>Categoria
+                <select class="input" @bind="_newCategoryId">
+                    @foreach (var category in _categories)
+                    {
+                        <option value="@category.Id">@category.Emoji @category.Name</option>
+                    }
+                </select>
+            </label>
+            @if (_categories.FirstOrDefault(c => c.Id == _newCategoryId) is { TemplateSections.Count: > 0 } selected)
+            {
+                <p class="muted small">Tópicos criados: @string.Join(" · ", selected.TemplateSections)</p>
+            }
+            <div class="modal-actions">
+                <button type="button" class="btn" @onclick="() => _showNew = false">Cancelar</button>
+                <button type="submit" class="btn btn-primary" disabled="@string.IsNullOrWhiteSpace(_newTitle)">Criar</button>
+            </div>
+        </form>
+    </div>
+}
+
+@code {
+    private readonly Debouncer _searchDebouncer = new(TimeSpan.FromMilliseconds(300));
+    private List<CategoryDto> _categories = [];
+    private List<IdeaSummaryDto>? _ideas;
+
+    private Guid? _categoryId;
+    private IdeaStatus? _status;
+    private IdeaSort _sort = IdeaSort.Updated;
+    private string? _tag;
+    private string _search = string.Empty;
+
+    private string _quickText = string.Empty;
+    private bool _capturing;
+
+    private bool _showNew;
+    private string _newTitle = string.Empty;
+    private Guid _newCategoryId;
+
+    private bool HasFilters => _categoryId is not null || _status is not null || _tag is not null || _search.Length > 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Task.WhenAll(LoadCategoriesAsync(), LoadIdeasAsync());
+            _newCategoryId = _categories.FirstOrDefault(c => !c.IsInbox)?.Id ?? Category.InboxId;
+        }
+        catch (ApiException e)
+        {
+            Toast.Error(e);
+        }
+    }
+
+    private async Task LoadCategoriesAsync() => _categories = await Api.GetCategoriesAsync();
+
+    private async Task LoadIdeasAsync()
+    {
+        try
+        {
+            _ideas = await Api.SearchIdeasAsync(new IdeaQuery(_categoryId, _status, _tag, _search, _sort));
+        }
+        catch (ApiException e)
+        {
+            Toast.Error(e);
+        }
+    }
+
+    private Task SelectCategory(Guid? id)
+    {
+        _categoryId = id;
+        if (id is not null)
+        {
+            _newCategoryId = id.Value;
+        }
+
+        return LoadIdeasAsync();
+    }
+
+    private Task FilterByTag(string? tag)
+    {
+        _tag = tag;
+        return LoadIdeasAsync();
+    }
+
+    private void SearchChanged() => _searchDebouncer.Run(async () =>
+    {
+        await LoadIdeasAsync();
+        StateHasChanged();
+    });
+
+    private async Task CaptureAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_quickText))
+        {
+            return;
+        }
+
+        _capturing = true;
+        try
+        {
+            await Api.QuickCaptureAsync(_quickText);
+            _quickText = string.Empty;
+            Toast.Success("Ideia capturada na Caixa de entrada 📥");
+            await Task.WhenAll(LoadCategoriesAsync(), LoadIdeasAsync());
+        }
+        catch (ApiException e)
+        {
+            Toast.Error(e);
+        }
+        finally
+        {
+            _capturing = false;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        try
+        {
+            var idea = await Api.CreateIdeaAsync(new CreateIdeaRequest(_newTitle, _newCategoryId));
+            Nav.NavigateTo($"ideas/{idea.Id}");
+        }
+        catch (ApiException e)
+        {
+            Toast.Error(e);
+        }
+    }
+
+    public void Dispose() => _searchDebouncer.Dispose();
+}

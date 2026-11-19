@@ -1,0 +1,50 @@
+@page "/login"
+@layout EmptyLayout
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Entrar · IdeaVault</PageTitle>
+
+<div class="login-card">
+    <Logo Size="56" />
+    <h1>IdeaVault</h1>
+    <p class="muted">Seu cofre pessoal de ideias.</p>
+
+    <form @onsubmit="LoginAsync">
+        <input type="password" class="input" placeholder="Senha" autocomplete="current-password"
+               @bind="_password" @bind:event="oninput" autofocus aria-label="Senha" />
+        <button type="submit" class="btn btn-primary btn-block" disabled="@(_busy || _password.Length == 0)">
+            @(_busy ? "Entrando…" : "Entrar")
+        </button>
+    </form>
+
+    @if (_error is not null)
+    {
+        <p class="form-error">@_error</p>
+    }
+</div>
+
+@code {
+    private string _password = string.Empty;
+    private string? _error;
+    private bool _busy;
+
+    private async Task LoginAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.LoginAsync(_password);
+            Nav.NavigateTo("", replace: true);
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

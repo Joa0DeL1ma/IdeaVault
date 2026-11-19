@@ -1,0 +1,33 @@
+<a class="card idea-card" href="ideas/@Idea.Id" style="--cat: @Idea.CategoryColor">
+    <div class="card-top">
+        <span class="card-category">@Idea.CategoryEmoji @Idea.CategoryName</span>
+        @if (Idea.IsPinned)
+        {
+            <span class="pin" title="Fixada">📌</span>
+        }
+    </div>
+    <h3>@Idea.Title</h3>
+    @if (!string.IsNullOrWhiteSpace(Idea.Summary))
+    {
+        <p class="card-summary">@Idea.Summary</p>
+    }
+    @if (Idea.Tags.Count > 0)
+    {
+        <div class="card-tags">
+            @foreach (var tag in Idea.Tags)
+            {
+                <button type="button" class="tag tag-link" @onclick="() => OnTagClick.InvokeAsync(tag)"
+                        @onclick:preventDefault @onclick:stopPropagation>#@tag</button>
+            }
+        </div>
+    }
+    <div class="card-footer">
+        <span class="status status-@Idea.Status.ToString().ToLowerInvariant()">@Labels.Status(Idea.Status)</span>
+        <span class="excitement" title="Empolgação @Idea.Excitement/5">@Labels.Stars(Idea.Excitement)</span>
+    </div>
+</a>
+
+@code {
+    [Parameter, EditorRequired] public IdeaSummaryDto Idea { get; set; } = null!;
+    [Parameter] public EventCallback<string> OnTagClick { get; set; }
+}

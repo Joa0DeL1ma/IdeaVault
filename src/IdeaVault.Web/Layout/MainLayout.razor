@@ -1,3 +1,42 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@inject TokenStore Tokens
+@inject NavigationManager Nav
 
-@Body
+@if (_authenticated)
+{
+    <div class="shell">
+        <header class="topbar">
+            <a href="" class="brand"><Logo Size="28" /> <span>IdeaVault</span></a>
+            <nav class="nav-desktop">
+                <NavLink href="" Match="NavLinkMatch.All">Ideias</NavLink>
+                <NavLink href="categories">Categorias</NavLink>
+                <NavLink href="settings">Ajustes</NavLink>
+            </nav>
+        </header>
+
+        <main class="content">@Body</main>
+
+        <nav class="nav-mobile">
+            <NavLink href="" Match="NavLinkMatch.All"><span>💡</span>Ideias</NavLink>
+            <NavLink href="categories"><span>🗂️</span>Categorias</NavLink>
+            <NavLink href="settings"><span>⚙️</span>Ajustes</NavLink>
+        </nav>
+    </div>
+}
+
+<Toasts />
+
+@code {
+    private bool _authenticated;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (await Tokens.GetAsync() is null)
+        {
+            Nav.NavigateTo("login", replace: true);
+            return;
+        }
+
+        _authenticated = true;
+    }
+}

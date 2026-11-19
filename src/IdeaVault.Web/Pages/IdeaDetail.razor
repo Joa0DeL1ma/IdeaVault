@@ -1,0 +1,257 @@
+@page "/ideas/{Id:guid}"
+@implements IAsyncDisposable
+@inject ApiClient Api
+@inject ToastService Toast
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>@(_idea?.Title ?? "Ideia") · IdeaVault</PageTitle>
+
+@if (_idea is null)
+{
+    <div class="card skeleton tall"></div>
+}
+else
+{
+    <div class="detail" style="--cat: @_idea.CategoryColor">
+        <div class="detail-bar">
+            <a href="" class="link">← Ideias</a>
+            <SaveIndicator State="_saveState" />
+        </div>
+
+        <textarea class="title-input" rows="1" @bind="_title" @bind:event="oninput" @bind:after="IdeaChanged"
+                  maxlength="200" placeholder="Título da ideia" aria-label="Título"></textarea>
+        <textarea class="summary-input" @bind="_summary" @bind:event="oninput" @bind:after="IdeaChanged"
+                  maxlength="2000" placeholder="Resumo em uma ou duas frases…" aria-label="Resumo"></textarea>
+
+        <div class="meta-grid">
+            <label>Categoria
+                <select class="input" @bind="_categoryId" @bind:after="IdeaChanged">
+                    @foreach (var category in _categories)
+                    {
+                        <option value="@category.Id">@category.Emoji @category.Name</option>
+                    }
+                </select>
+            </label>
+            <label>Status
+                <select class="input" @bind="_status" @bind:after="IdeaChanged">
+                    @foreach (var status in Enum.GetValues<IdeaStatus>())
+                    {
+                        <option value="@status">@Labels.Status(status)</option>
+                    }
+                </select>
+            </label>
+            <div class="field">
+                <span>Empolgação</span>
+                <ExcitementPicker Value="_excitement" ValueChanged="ExcitementChanged" />
+            </div>
+            <div class="field">
+                <span>Fixar</span>
+                <button type="button" class="btn toggle @(_pinned ? "on" : "")" @onclick="TogglePinned">
+                    📌 @(_pinned ? "Fixada" : "Não fixada")
+                </button>
+            </div>
+        </div>
+
+        <TagInput Value="_tags" ValueChanged="TagsChanged" />
+
+        <h2 class="sections-title">Tópicos</h2>
+        @for (var i = 0; i < _sections.Count; i++)
+        {
+            var index = i;
+            var section = _sections[i];
+            <SectionEditor @key="section.Id" IdeaId="Id" Section="section"
+                           IsFirst="index == 0" IsLast="index == _sections.Count - 1"
+                           OnMoveUp="() => MoveAsync(index, -1)" OnMoveDown="() => MoveAsync(index, 1)"
+                           OnDelete="() => DeleteSectionAsync(section)" OnSaveState="SetSaveState" />
+        }
+
+        <form class="add-section" @onsubmit="AddSectionAsync">
+            <input class="input" placeholder="Novo tópico (ex.: Monetização)" maxlength="100"
+                   @bind="_newSection" @bind:event="oninput" aria-label="Novo tópico" />
+            <button class="btn" type="submit" disabled="@string.IsNullOrWhiteSpace(_newSection)">+ Adicionar</button>
+        </form>
+
+        <footer class="detail-footer">
+            <span class="muted small">Criada em @_idea.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy") · atualizada @Labels.Relative(_idea.UpdatedAt)</span>
+            <button class="btn btn-danger" @onclick="DeleteIdeaAsync">Excluir ideia</button>
+        </footer>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly Debouncer _saver = new(TimeSpan.FromMilliseconds(800));
+    private IdeaDetailDto? _idea;
+    private List<CategoryDto> _categories = [];
+    private List<IdeaSectionDto> _sections = [];
+    private SaveState _saveState;
+
+    private string _title = string.Empty;
+    private string _summary = string.Empty;
+    private Guid _categoryId;
+    private IdeaStatus _status;
+    private int _excitement;
+    private bool _pinned;
+    private IReadOnlyList<string> _tags = [];
+    private string _newSection = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var categories = Api.GetCategoriesAsync();
+            Apply(await Api.GetIdeaAsync(Id));
+            _categories = await categories;
+            _sections = [.. _idea!.Sections];
+        }
+        catch (ApiException e) when (e.Status == 404)
+        {
+            Toast.Error("Ideia não encontrada.");
+            Nav.NavigateTo("");
+        }
+        catch (ApiException e)
+        {
+            Toast.Error(e);
+        }
+    }
+
+    private void Apply(IdeaDetailDto idea)
+    {
+        _idea = idea;
+        _title = idea.Title;
+        _summary = idea.Summary;
+        _categoryId = idea.CategoryId;
+        _status = idea.Status;
+        _excitement = idea.Excitement;
+        _pinned = idea.IsPinned;
+        _tags = idea.Tags;
+    }
+
+    private void IdeaChanged() => _saver.Run(SaveIdeaAsync);
+
+    private void ExcitementChanged(int value)
+    {
+        _excitement = value;
+        IdeaChanged();
+    }
+
+    private void TagsChanged(IReadOnlyList<string> tags)
+    {
+        _tags = tags;
+        IdeaChanged();
+    }
+
+    private void TogglePinned()
+    {
+        _pinned = !_pinned;
+        IdeaChanged();
+    }
+
+    private async Task SaveIdeaAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_title))
+        {
+            return;
+        }
+
+        SetSaveState(SaveState.Saving);
+        try
+        {
+            // Only refresh read-only bits (category color, dates) so typing is never interrupted.
+            var title = _title.ReplaceLineEndings(" "); // the title field wraps, but titles are single-line
+            _idea = await Api.UpdateIdeaAsync(Id, new UpdateIdeaRequest(
+                title, _categoryId, _summary, _status, _excitement, _tags, _pinned));
+            SetSaveState(SaveState.Saved);
+        }
+        catch (ApiException e)
+        {
+            SetSaveState(SaveState.Error);
+            Toast.Error(e);
+        }
+    }
+
+    private void SetSaveState(SaveState state)
+    {
+        _saveState = state;
+        StateHasChanged();
+    }
+
+    private async Task AddSectionAsync()
+    {
+        try
+        {
+            _sections.Add(await Api.AddSectionAsync(Id, new SaveSectionRequest(_newSection)));
+            _newSection = string.Empty;
+        }
+        catch (ApiException e)
+        {
+            Toast.Error(e);
+        }
+    }
+
+    private async Task MoveAsync(int index, int offset)
+    {
+        var target = index + offset;
+        if (target < 0 || target >= _sections.Count)
+        {
+            return;
+        }
+
+        (_sections[index], _sections[target]) = (_sections[target], _sections[index]);
+        try
+        {
+            await Api.ReorderSectionsAsync(Id, [.. _sections.Select(s => s.Id)]);
+        }
+        catch (ApiException e)
+        {
+            (_sections[index], _sections[target]) = (_sections[target], _sections[index]);
+            Toast.Error(e);
+        }
+    }
+
+    private async Task DeleteSectionAsync(IdeaSectionDto section)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Remover o tópico \"{section.Title}\"?"))
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.DeleteSectionAsync(Id, section.Id);
+            _sections.Remove(section);
+        }
+        catch (ApiException e)
+        {
+            Toast.Error(e);
+        }
+    }
+
+    private async Task DeleteIdeaAsync()
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Excluir esta ideia e todos os tópicos? Não dá para desfazer."))
+        {
+            return;
+        }
+
+        try
+        {
+            _saver.Cancel(); // drop pending saves of a deleted idea
+            await Api.DeleteIdeaAsync(Id);
+            Toast.Success("Ideia excluída.");
+            Nav.NavigateTo("");
+        }
+        catch (ApiException e)
+        {
+            Toast.Error(e);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _saver.FlushAsync();
+        _saver.Dispose();
+    }
+}

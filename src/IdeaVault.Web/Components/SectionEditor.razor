@@ -1,0 +1,102 @@
+@implements IAsyncDisposable
+@inject ApiClient Api
+
+<article class="section-editor">
+    <header class="section-head">
+        <input class="section-title" @bind="_title" @bind:event="oninput" @bind:after="Changed"
+               maxlength="100" placeholder="Título do tópico" aria-label="Título do tópico" />
+        <div class="section-actions">
+            <button type="button" class="icon-btn" title="@(_editing ? "Visualizar" : "Editar")" @onclick="ToggleEditing">@(_editing ? "👁" : "✏️")</button>
+            <button type="button" class="icon-btn" title="Mover para cima" disabled="@IsFirst" @onclick="OnMoveUp">↑</button>
+            <button type="button" class="icon-btn" title="Mover para baixo" disabled="@IsLast" @onclick="OnMoveDown">↓</button>
+            <button type="button" class="icon-btn danger" title="Remover tópico" @onclick="DeleteAsync">✕</button>
+        </div>
+    </header>
+
+    @if (_editing)
+    {
+        <textarea class="section-content" @bind="_content" @bind:event="oninput" @bind:after="Changed"
+                  @onfocusout="StopEditing" placeholder="Escreva em markdown… (**negrito**, - listas, [links](url))"></textarea>
+    }
+    else
+    {
+        <div class="markdown @(string.IsNullOrWhiteSpace(_content) ? "empty" : "")" @onclick="StartEditing" title="Clique para editar">
+            @if (string.IsNullOrWhiteSpace(_content))
+            {
+                <span>Toque para escrever…</span>
+            }
+            else
+            {
+                @Markdown.ToHtml(_content)
+            }
+        </div>
+    }
+</article>
+
+@code {
+    [Parameter, EditorRequired] public Guid IdeaId { get; set; }
+    [Parameter, EditorRequired] public IdeaSectionDto Section { get; set; } = null!;
+    [Parameter] public bool IsFirst { get; set; }
+    [Parameter] public bool IsLast { get; set; }
+    [Parameter] public EventCallback OnMoveUp { get; set; }
+    [Parameter] public EventCallback OnMoveDown { get; set; }
+    [Parameter] public EventCallback OnDelete { get; set; }
+    [Parameter] public EventCallback<SaveState> OnSaveState { get; set; }
+
+    private readonly Debouncer _saver = new(TimeSpan.FromMilliseconds(800));
+    private string _title = string.Empty;
+    private string _content = string.Empty;
+    private bool _editing;
+
+    // Local copies are taken once, so re-renders of the parent never overwrite what is being typed.
+    protected override void OnInitialized()
+    {
+        _title = Section.Title;
+        _content = Section.Content;
+    }
+
+    private void StartEditing() => _editing = true;
+
+    private void StopEditing()
+    {
+        if (!string.IsNullOrWhiteSpace(_content))
+        {
+            _editing = false;
+        }
+    }
+
+    private void ToggleEditing() => _editing = !_editing;
+
+    private void Changed() => _saver.Run(SaveAsync);
+
+    private async Task DeleteAsync()
+    {
+        await _saver.FlushAsync(); // never leave a pending save pointing at a deleted section
+        await OnDelete.InvokeAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_title))
+        {
+            return; // a title is required; wait until there is one
+        }
+
+        await OnSaveState.InvokeAsync(SaveState.Saving);
+        try
+        {
+            await Api.UpdateSectionAsync(IdeaId, Section.Id, new SaveSectionRequest(_title, _content));
+            await OnSaveState.InvokeAsync(SaveState.Saved);
+        }
+        catch (ApiException)
+        {
+            await OnSaveState.InvokeAsync(SaveState.Error);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _saver.FlushAsync();
+        _saver.Dispose();
+    }
+}

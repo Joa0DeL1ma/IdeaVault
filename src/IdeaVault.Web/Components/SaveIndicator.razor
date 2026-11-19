@@ -1,0 +1,13 @@
+<span class="save-indicator save-@State.ToString().ToLowerInvariant()">
+    @(State switch
+    {
+        SaveState.Saving => "Salvando…",
+        SaveState.Saved => "Salvo ✓",
+        SaveState.Error => "Erro ao salvar",
+        _ => "",
+    })
+</span>
+
+@code {
+    [Parameter] public SaveState State { get; set; }
+}

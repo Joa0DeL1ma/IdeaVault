@@ -1,0 +1,172 @@
+@page "/categories"
+@inject ApiClient Api
+@inject ToastService Toast
+@inject IJSRuntime JS
+
+<PageTitle>Categorias · IdeaVault</PageTitle>
+
+<div class="page-head">
+    <h1>Categorias</h1>
+    <button class="btn btn-primary" @onclick="StartNew">+ Nova categoria</button>
+</div>
+<p class="muted">Cada categoria pode ter um <strong>template</strong>: os tópicos criados automaticamente em toda ideia nova.</p>
+
+@if (_editing is not null)
+{
+    <form class="card form-card" style="--cat: @_editing.Color" @onsubmit="SaveAsync">
+        <h2>@(_editingId is null ? "Nova categoria" : "Editar categoria")</h2>
+        <div class="form-row">
+            <label class="emoji-field">Emoji
+                <input class="input" @bind="_editing.Emoji" maxlength="16" />
+            </label>
+            <label class="grow">Nome
+                <input class="input" @bind="_editing.Name" maxlength="50" />
+            </label>
+            <label>Cor
+                <input class="input color" type="color" @bind="_editing.Color" @bind:event="oninput" />
+            </label>
+            <label class="order-field">Ordem
+                <input class="input" type="number" @bind="_editing.SortOrder" />
+            </label>
+        </div>
+        <label>Template (um tópico por linha)
+            <textarea class="input template" @bind="_editing.Template" placeholder="Problema&#10;Público&#10;Próximo passo"></textarea>
+        </label>
+        @foreach (var error in _errors)
+        {
+            <p class="form-error">@error</p>
+        }
+        <div class="modal-actions">
+            @if (_editingId is { } id && id != Category.InboxId)
+            {
+                <button type="button" class="btn btn-danger" @onclick="() => DeleteAsync(id)">Excluir</button>
+            }
+            <span class="grow"></span>
+            <button type="button" class="btn" @onclick="() => _editing = null">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+    </form>
+}
+
+<div class="category-list">
+    @foreach (var category in _categories)
+    {
+        <button class="card category-row" style="--cat: @category.Color" @onclick="() => Edit(category)">
+            <span class="category-emoji">@category.Emoji</span>
+            <span class="grow">
+                <strong>@category.Name</strong>
+                <span class="muted small block">
+                    @(category.TemplateSections.Count == 0 ? "Sem template" : string.Join(" · ", category.TemplateSections))
+                </span>
+            </span>
+            <span class="count">@category.IdeaCount</span>
+        </button>
+    }
+</div>
+
+@code {
+    private sealed class CategoryForm
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Emoji { get; set; } = "💡";
+        public string Color { get; set; } = "#7C5CFF";
+        public int SortOrder { get; set; }
+        public string Template { get; set; } = string.Empty;
+    }
+
+    private List<CategoryDto> _categories = [];
+    private CategoryForm? _editing;
+    private Guid? _editingId;
+    private List<string> _errors = [];
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _categories = await Api.GetCategoriesAsync();
+        }
+        catch (ApiException e)
+        {
+            Toast.Error(e);
+        }
+    }
+
+    private async Task StartNew()
+    {
+        await ScrollToFormAsync();
+        _editingId = null;
+        _errors = [];
+        _editing = new CategoryForm { SortOrder = _categories.Count == 0 ? 0 : _categories.Max(c => c.SortOrder) + 1 };
+    }
+
+    private async Task Edit(CategoryDto category)
+    {
+        await ScrollToFormAsync();
+        _editingId = category.Id;
+        _errors = [];
+        _editing = new CategoryForm
+        {
+            Name = category.Name,
+            Emoji = category.Emoji,
+            Color = category.Color,
+            SortOrder = category.SortOrder,
+            Template = string.Join('\n', category.TemplateSections),
+        };
+    }
+
+    // On phones the clicked row can be far below the form, which is rendered at the top.
+    private ValueTask ScrollToFormAsync() => JS.InvokeVoidAsync("scrollTo", new { top = 0, behavior = "smooth" });
+
+    private async Task SaveAsync()
+    {
+        var form = _editing!;
+        var request = new SaveCategoryRequest(form.Name, form.Emoji, form.Color, form.SortOrder,
+            form.Template.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
+        try
+        {
+            if (_editingId is { } id)
+            {
+                await Api.UpdateCategoryAsync(id, request);
+            }
+            else
+            {
+                await Api.CreateCategoryAsync(request);
+            }
+
+            Toast.Success("Categoria salva.");
+            _editing = null;
+            await LoadAsync();
+        }
+        catch (ApiException e)
+        {
+            _errors = e.Errors.Count > 0 ? [.. e.Errors.SelectMany(x => x.Value.Select(m => $"{x.Key}: {m}"))] : [e.Message];
+        }
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Excluir esta categoria?"))
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.DeleteCategoryAsync(id);
+            Toast.Success("Categoria excluída.");
+            _editing = null;
+            await LoadAsync();
+        }
+        catch (ApiException e) when (e.Status == 409)
+        {
+            Toast.Error("Mova ou exclua as ideias desta categoria antes de excluí-la.");
+        }
+        catch (ApiException e)
+        {
+            Toast.Error(e);
+        }
+    }
+}

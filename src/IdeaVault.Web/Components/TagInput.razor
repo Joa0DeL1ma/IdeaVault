@@ -1,0 +1,35 @@
+<div class="tag-input">
+    @foreach (var tag in Value)
+    {
+        <span class="tag">#@tag <button type="button" aria-label="Remover @tag" @onclick="() => Remove(tag)">×</button></span>
+    }
+    <input placeholder="@(Value.Count == 0 ? "Adicionar tags (Enter)" : "+ tag")" @bind="_draft" @bind:event="oninput"
+           @onkeydown="OnKeyDown" @onfocusout="Commit" maxlength="30" />
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<string> Value { get; set; } = [];
+    [Parameter] public EventCallback<IReadOnlyList<string>> ValueChanged { get; set; }
+
+    private string _draft = string.Empty;
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or ",")
+        {
+            await Commit();
+        }
+    }
+
+    private async Task Commit()
+    {
+        var tag = _draft.Trim().TrimStart('#').TrimEnd(',').ToLowerInvariant();
+        _draft = string.Empty;
+        if (tag.Length > 0 && !Value.Contains(tag))
+        {
+            await ValueChanged.InvokeAsync([.. Value, tag]);
+        }
+    }
+
+    private Task Remove(string tag) => ValueChanged.InvokeAsync([.. Value.Where(t => t != tag)]);
+}

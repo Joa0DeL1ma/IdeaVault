@@ -1,0 +1,51 @@
+@page "/settings"
+@inject ApiClient Api
+@inject ToastService Toast
+@inject IJSRuntime JS
+
+<PageTitle>Ajustes · IdeaVault</PageTitle>
+
+<h1>Ajustes</h1>
+
+<section class="card settings-card">
+    <h2>💾 Backup</h2>
+    <p class="muted">Baixe todas as categorias, ideias e tópicos em um arquivo JSON.</p>
+    <button class="btn btn-primary" disabled="@_exporting" @onclick="ExportAsync">
+        @(_exporting ? "Exportando…" : "Exportar JSON")
+    </button>
+</section>
+
+<section class="card settings-card">
+    <h2>📱 Instalar no celular</h2>
+    <p class="muted">No Chrome do Android, abra o menu ⋮ e toque em <strong>Instalar app</strong> (ou "Adicionar à tela inicial").</p>
+</section>
+
+<section class="card settings-card">
+    <h2>🚪 Sessão</h2>
+    <p class="muted">Sair remove o acesso deste aparelho até você entrar de novo.</p>
+    <button class="btn btn-danger" @onclick="Api.LogoutAsync">Sair</button>
+</section>
+
+<p class="muted small center">IdeaVault · <a class="link" href="https://github.com/Joa0DeL1ma/IdeaVault" target="_blank" rel="noopener">código no GitHub</a></p>
+
+@code {
+    private bool _exporting;
+
+    private async Task ExportAsync()
+    {
+        _exporting = true;
+        try
+        {
+            var json = await Api.ExportAsync();
+            await JS.InvokeVoidAsync("ideaVault.download", $"ideavault-backup-{DateTime.Now:yyyy-MM-dd}.json", json);
+        }
+        catch (ApiException e)
+        {
+            Toast.Error(e);
+        }
+        finally
+        {
+            _exporting = false;
+        }
+    }
+}

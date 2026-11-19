@@ -1,0 +1,15 @@
+<div class="stars" role="radiogroup" aria-label="Empolgação">
+    @for (var i = Idea.MinExcitement; i <= Idea.MaxExcitement; i++)
+    {
+        var value = i;
+        <button type="button" class="star @(value <= Value ? "on" : "")" role="radio"
+                aria-checked="@(value == Value)" title="@value de 5" @onclick="() => Select(value)">★</button>
+    }
+</div>
+
+@code {
+    [Parameter] public int Value { get; set; }
+    [Parameter] public EventCallback<int> ValueChanged { get; set; }
+
+    private Task Select(int value) => value == Value ? Task.CompletedTask : ValueChanged.InvokeAsync(value);
+}
