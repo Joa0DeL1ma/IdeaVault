@@ -23,3 +23,15 @@ jobs:
 
       - name: Test
         run: dotnet test --no-build --configuration Release --verbosity normal
+
+  docker-image:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build production image
+        run: docker build --tag ideavault:ci .
+
+      - name: Report image size
+        run: docker image ls ideavault:ci --format "{{.Repository}}:{{.Tag}} {{.Size}}"
